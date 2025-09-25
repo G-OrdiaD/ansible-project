@@ -2,17 +2,11 @@
 - name: Synchronize /etc/hosts across all servers
   hosts: all
   become: true
-  vars:
-    server_ips:
-      ansible-control: "{{ control_ip }}"
-      app-server: "{{ app_ip }}"
-      nexus-server: "{{ nexus_ip }}"
-      jenkins-master: "{{ jenkins_ip }}"
   
   tasks:
     - name: Deploy unified hosts file
-      template:
-        src: hosts.j2
+      ansible.builtin.template:
+        src: templates/hosts.j2
         dest: /etc/hosts
         backup: yes
         owner: root
