@@ -1,0 +1,11 @@
+---
+- name: Complete infrastructure setup
+  hosts: all
+  gather_facts: false
+
+- name: Setup common packages
+  import_playbook: setup-infrastructure.yml
+
+- name: Deploy application
+  import_playbook: deploy-app.yml
+  when: "'app_servers' in group_names"

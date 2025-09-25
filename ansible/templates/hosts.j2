@@ -1,0 +1,6 @@
+127.0.0.1 localhost
+
+# DevOps Project - Managed by Ansible
+{% for hostname, ip in server_ips.items() %}
+{{ ip }} {{ hostname }}
+{% endfor %}

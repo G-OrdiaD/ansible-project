@@ -1,0 +1,50 @@
+---
+- name: Deploy Node.js application
+  hosts: app_servers
+  vars:
+    app_version: "{{ build_number | default('latest') }}"
+    
+  tasks:
+    - name: Ensure app directory exists
+      file:
+        path: "/opt/{{ app_name }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+
+    - name: Download application artifact
+      get_url:
+        url: "http://nexus-server:{{ nexus_port }}/repository/{{ nexus_repo }}/app-{{ app_version }}.zip"
+        dest: "/tmp/app-{{ app_version }}.zip"
+        
+    - name: Extract application
+      unarchive:
+        src: "/tmp/app-{{ app_version }}.zip"
+        dest: "/opt/{{ app_name }}"
+        remote_src: yes
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+
+    - name: Install dependencies
+      command: npm install
+      args:
+        chdir: "/opt/{{ app_name }}"
+
+    - name: Deploy systemd service
+      template:
+        src: "nodeapp.service.j2"
+        dest: "/etc/systemd/system/{{ app_name }}.service"
+      notify: restart nodejs app
+
+    - name: Ensure app is running
+      systemd:
+        name: "{{ app_name }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: restart nodejs app
+      systemd:
+        name: "{{ app_name }}"
+        state: restarted

@@ -1,0 +1,22 @@
+---
+- name: Setup common infrastructure
+  hosts: dev_env
+  roles:
+    - common
+
+- name: Setup Jenkins master
+  hosts: jenkins_servers
+  roles:
+    - jenkins
+
+- name: Setup Nexus server
+  hosts: nexus_servers
+  roles:
+    - nexus
+
+- name: Setup App server
+  hosts: app_servers
+  roles:
+    - nodejs
+    - nginx
+    - mongodb
