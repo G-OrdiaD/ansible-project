@@ -1,20 +1,33 @@
-!/bin/bash
-# Sync this script to control server when IPs change
+#!/bin/bash
+# Usage: ./update-ips.sh <control_ip> <app_ip> <nexus_ip> <jenkins_ip>
 
-echo "Updating /etc/hosts on control server..."
+if [ $# -ne 4 ]; then
+    echo "Usage: $0 <control_ip> <app_ip> <nexus_ip> <jenkins_ip>"
+    exit 1
+fi
 
-sudo bash -c 'cat > /etc/hosts << EOF
-127.0.0.1 localhost
+cd infrastructure/ansible
 
-# DevOps Project Servers - Update these IPs when they change
-'"$1"' app-server
-'"$2"' nexus-server
-'"$3"' jenkins-master
-'"$4"' ansible-control
-EOF'
+# Update group_vars
+cat > group_vars/all.yml << EOF
+---
+server_ips:
+  ansible-control: "$1"
+  app-server: "$2"
+  nexus-server: "$3"
+  jenkins-master: "$4"
 
-echo "Updated /etc/hosts with:"
-echo "app-server: $1"
-echo "nexus-server: $2" 
-echo "jenkins-master: $3"
-echo "ansible-control: $4"
+app_name: "nodejs-app"
+app_port: 3000
+app_user: "ec2-user"
+app_group: "ec2-user"
+nexus_port: 8081
+nexus_repo: "node-app-releases"
+jenkins_port: 8080
+EOF
+
+# Update hosts on all servers
+ansible-playbook playbooks/update-hosts.yml
+
+echo "IPs updated successfully!"
+echo "Control: $1, App: $2, Nexus: $3, Jenkins: $4"

@@ -1,0 +1,20 @@
+---
+- name: Add MongoDB repository
+  yum_repository:
+    name: mongodb-org-4.4
+    description: MongoDB Repository
+    baseurl: https://repo.mongodb.org/yum/redhat/7/mongodb-org/4.4/x86_64/
+    gpgcheck: yes
+    gpgkey: https://www.mongodb.org/static/pgp/server-4.4.asc
+  when: ansible_os_family == "RedHat"
+
+- name: Install MongoDB
+  package:
+    name: mongodb-org
+    state: present
+
+- name: Start MongoDB service
+  service:
+    name: mongod
+    state: started
+    enabled: yes

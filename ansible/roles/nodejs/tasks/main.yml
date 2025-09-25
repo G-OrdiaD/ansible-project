@@ -1,0 +1,17 @@
+---
+- name: Install Node.js on RedHat
+  package:
+    name: nodejs
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install Node.js on Debian
+  apt:
+    name: nodejs
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install PM2 process manager
+  npm:
+    name: pm2
+    global: yes

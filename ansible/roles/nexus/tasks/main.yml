@@ -1,0 +1,39 @@
+---
+- name: Install Java
+  package:
+    name: java-11-openjdk
+    state: present
+
+- name: Create Nexus user
+  user:
+    name: nexus
+    system: yes
+    home: /opt/nexus
+
+- name: Download Nexus
+  get_url:
+    url: https://download.sonatype.com/nexus/3/nexus-3.64.0-01-unix.tar.gz
+    dest: /tmp/nexus.tar.gz
+
+- name: Extract Nexus
+  unarchive:
+    src: /tmp/nexus.tar.gz
+    dest: /opt/
+    remote_src: yes
+    owner: nexus
+    group: nexus
+
+- name: Create symlink
+  file:
+    src: /opt/nexus-3.64.0-01
+    dest: /opt/nexus
+    state: link
+    owner: nexus
+    group: nexus
+
+- name: Start Nexus service
+  systemd:
+    name: nexus
+    state: started
+    enabled: yes
+    daemon_reload: yes
