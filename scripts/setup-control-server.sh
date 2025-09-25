@@ -8,8 +8,8 @@ sudo pip3 install ansible
 
 # Clone project
 cd ~
-git clone https://github.com/yourusername/devops-project.git
-cd devops-project
+git clone https://github.com/G-OrdiaD/ansible-project.git
+cd ansible-project
 
 # Setup SSH key
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/ansible-key -N ""

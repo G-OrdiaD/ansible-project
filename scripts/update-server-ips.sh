@@ -1,12 +1,12 @@
 #!/bin/bash
-# Usage: ./update-ips.sh <control_ip> <app_ip> <nexus_ip> <jenkins_ip>
+# Usage: ./update-server-ips.sh <control_ip> <app_ip> <nexus_ip> <jenkins_ip>
 
 if [ $# -ne 4 ]; then
     echo "Usage: $0 <control_ip> <app_ip> <nexus_ip> <jenkins_ip>"
     exit 1
 fi
 
-cd infrastructure/ansible
+cd ansible
 
 # Update group_vars
 cat > group_vars/all.yml << EOF
