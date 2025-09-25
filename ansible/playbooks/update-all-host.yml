@@ -6,7 +6,7 @@
   tasks:
     - name: Deploy unified hosts file
       ansible.builtin.template:
-        src: templates/hosts.j2
+        src: hosts.j2
         dest: /etc/hosts
         backup: yes
         owner: root
