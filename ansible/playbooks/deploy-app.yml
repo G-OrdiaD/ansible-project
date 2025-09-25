@@ -1,21 +1,21 @@
 ---
-- name: Deploy Node.js application
+- name: Deploy Node.js application # Variable-driven deployment
   hosts: app_servers
   vars:
     app_version: "{{ build_number | default('latest') }}"
     
   tasks:
-    - name: Ensure app directory exists
+    - name: Ensure app directory exists # Fix permissions as needed
       file:
         path: "/opt/{{ app_name }}"
         state: directory
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
 
-    - name: Download application artifact
+    - name: Download application artifact # Adjust URL as needed
       get_url:
-        url: "http://nexus-server:{{ nexus_port }}/repository/{{ nexus_repo }}/app-{{ app_version }}.zip"
-        dest: "/tmp/app-{{ app_version }}.zip"
+        url: "http://nexus:{{ nexus_port }}/repository/{{ nexus_repo }}/app-{{ app_version }}.zip" # Ensure nexus URL is reachable and correct
+        dest: "/tmp/app-{{ app_version }}.zip" # Download to a temp location
         
     - name: Extract application
       unarchive:
@@ -25,18 +25,19 @@
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
 
-    - name: Install dependencies
-      command: npm install
+    - name: Install dependencies # Using npm as an example
+      command: npm install # Adjust if using yarn or other package managers
       args:
-        chdir: "/opt/{{ app_name }}"
+        chdir: "/opt/{{ app_name }}" 
+        creates: "/opt/{{ app_name }}/node_modules" # Avoid reinstalling if node_modules exists
 
-    - name: Deploy systemd service
+    - name: Deploy systemd service # Example for a Node.js app
       template:
-        src: "nodeapp.service.j2"
-        dest: "/etc/systemd/system/{{ app_name }}.service"
+        src: "nodeapp.service.j2" # Ensure this template exists in your templates directory
+        dest: "/etc/systemd/system/{{ app_name }}.service" # hostname should match your app_name variable
       notify: restart nodejs app
 
-    - name: Ensure app is running
+    - name: Ensure app is running # Start and enable the service
       systemd:
         name: "{{ app_name }}"
         state: started

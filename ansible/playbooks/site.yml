@@ -4,7 +4,7 @@
   gather_facts: false
 
 - name: Setup common packages
-  import_playbook: setup-infrastructure.yml
+  import_playbook: setup-servers.yml
 
 - name: Deploy application
   import_playbook: deploy-app.yml
