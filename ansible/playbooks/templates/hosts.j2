@@ -1,6 +1,10 @@
 127.0.0.1 localhost
+{{ ansible_default_ipv4.address }} {{ ansible_hostname }}
 
-# DevOps Project - Managed by Ansible
+# DevOps Project - Managed by Ansible Do not edit manually
 {% for hostname, ip in server_ips.items() %}
+# Exclude the current host being configured from this external list
+{% if hostname != inventory_hostname %}
 {{ ip }} {{ hostname }}
+{% endif %}
 {% endfor %}
