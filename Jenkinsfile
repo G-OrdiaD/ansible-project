@@ -2,8 +2,8 @@ pipeline {
     agent any
     
     environment {
-        NEXUS_URL = 'http://nexus-server:8081/repository/node-app-releases'
-        ANSIBLE_PROJECT_PATH = '/home/ec2-user/devops-project/infrastructure/ansible'
+        NEXUS_URL = 'http://nexus:8081/repository/node-app-releases'
+        ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project/ansible'
     }
     
     parameters {

@@ -30,18 +30,18 @@ cat > group_vars/all.yml << EOF
 ---
 # Server IPs - Updated automatically
 server_ips:
-  ansible-control: "$CONTROL_IP"
-  app-server: "$APP_IP"
-  nexus-server: "$NEXUS_IP"
+  control-node: "$CONTROL_IP"
+  app: "$APP_IP"
+  nexus: "$NEXUS_IP"
   jenkins-master: "$JENKINS_IP"
 
 # This variable is crucial for updating the /etc/hosts file on each server
 hosts_entries:
-  - hostname: ansible-control
+  - hostname: control-node
     ip: "$CONTROL_IP"
-  - hostname: app-server
+  - hostname: app
     ip: "$APP_IP"
-  - hostname: nexus-server
+  - hostname: nexus
     ip: "$NEXUS_IP"
   - hostname: jenkins-master
     ip: "$JENKINS_IP"
