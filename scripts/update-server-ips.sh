@@ -27,7 +27,7 @@ jenkins_port: 8080
 EOF
 
 # Update hosts on all servers
-ansible-playbook playbooks/update-hosts.yml
+ansible-playbook playbooks/update-all-hosts.yml
 
 echo "IPs updated successfully!"
 echo "Control: $1, App: $2, Nexus: $3, Jenkins: $4"
