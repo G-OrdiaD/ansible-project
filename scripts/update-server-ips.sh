@@ -93,7 +93,8 @@ echo "Updated /etc/hosts (backup created at /etc/hosts.backup)"
 echo "Debug: Checking if playbook exists at: playbooks/update-all-host.yml"
 if [ -f "playbooks/update-all-host.yml" ]; then
     echo "Debug: Playbook found! Running ansible-playbook..."
-    ansible-playbook -i inventory/hosts.ini playbooks/update-all-host.yml
+    echo "Debug: Using inventory file: ../inventory/hosts.ini"
+    ansible-playbook -i ../inventory/hosts.ini playbooks/update-all-host.yml
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
     else
