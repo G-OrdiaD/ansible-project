@@ -26,15 +26,7 @@ pipeline {
             }
             post {
                 always {
-                    junit '**/junit.xml'
-                    publishHTML([target: [
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'src/coverage/lcov-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Coverage Report'
-                    ]])
+                    echo "Skipping JUnit/coverage reports since no tests yet"
                 }
             }
         }
