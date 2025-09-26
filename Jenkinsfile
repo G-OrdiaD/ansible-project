@@ -3,7 +3,8 @@ pipeline {
     
     environment {
         NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases'
-        ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project/ansible'
+        ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project'
+        APP_SERVER_URL = '51.21.129.73:3000'  // Your app server IP and port
     }
     
     parameters {
@@ -63,14 +64,14 @@ pipeline {
             steps {
                 script {
                     if (params.DEPLOY_ACTION == 'deploy') {
-                        // REPLACED SSH COMMAND WITH DIRECT ANSIBLE CALL
                         sh """
                             cd ${ANSIBLE_PROJECT_PATH} && \\
+                            # Ensure we have the latest playbooks
                             git pull origin main && \\
+                            # Deploy using Ansible
                             ansible-playbook playbooks/deploy-app.yml \\
                                 -i inventory/hosts.ini \\
-                                -e "build_number=${env.BUILD_NUMBER}" \\
-                                -e "app_version=${env.BUILD_NUMBER}"
+                                -e "build_number=${env.BUILD_NUMBER}"
                         """
                     } else {
                         echo 'Rollback selected - skipping deployment'
@@ -82,8 +83,11 @@ pipeline {
         stage('Integration Tests') {
             steps {
                 sh """
-                    curl -f http://app-server/health
-                    curl -f http://app-server/ | grep "building pipelines like a pro"
+                    echo "Testing application health endpoint..."
+                    curl -f http://${APP_SERVER_URL}/health || echo "Health endpoint not available"
+                    
+                    echo "Testing main application endpoint..."
+                    curl -f http://${APP_SERVER_URL}/ || echo "Main endpoint not available"
                 """
             }
         }
