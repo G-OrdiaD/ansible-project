@@ -23,9 +23,18 @@ if [ ! -d "ansible" ]; then
     exit 1
 fi
 
+echo "Debug: Before cd ansible, current directory: $(pwd)"
 cd ansible
+echo "Debug: After cd ansible, current directory: $(pwd)"
+echo "Debug: Contents of current directory:"
+ls -la
+echo "Debug: Checking playbooks directory:"
+ls -la playbooks/
+echo "Debug: Specifically looking for update-all-host.yml:"
+ls -la playbooks/update-all-host.yml
 
 # Update group_vars/all.yml
+mkdir -p inventory/group_vars
 cat > inventory/group_vars/all.yml << EOF
 ---
 # Server IPs - Updated automatically
@@ -60,7 +69,7 @@ nexus_repo: "node-app-releases"
 jenkins_port: 8080
 EOF
 
-echo "Updated group_vars/all.yml"
+echo "Updated inventory/group_vars/all.yml"
 
 # Update /etc/hosts on the control node first
 echo "Updating /etc/hosts on control node..."
@@ -81,8 +90,9 @@ sudo rm -f /tmp/new_hosts
 echo "Updated /etc/hosts (backup created at /etc/hosts.backup)"
 
 # Update hosts on all servers via Ansible
+echo "Debug: Checking if playbook exists at: playbooks/update-all-host.yml"
 if [ -f "playbooks/update-all-host.yml" ]; then
-    echo "Running ansible-playbook to update all servers..."
+    echo "Debug: Playbook found! Running ansible-playbook..."
     ansible-playbook -i inventory/hosts.ini playbooks/update-all-host.yml
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
@@ -91,7 +101,7 @@ if [ -f "playbooks/update-all-host.yml" ]; then
     fi
 else
     echo "Error: playbooks/update-all-host.yml not found"
-    echo "IPs were updated in group_vars/all.yml and local /etc/hosts, but playbook was not run"
+    echo "IPs were updated in inventory/group_vars/all.yml and local /etc/hosts, but playbook was not run"
     exit 1
 fi
 
