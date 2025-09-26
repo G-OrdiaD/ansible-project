@@ -63,7 +63,7 @@ pipeline {
             steps {
                 script {
                     if (params.DEPLOY_ACTION == 'deploy') {
-                        sshagent(['ansible-control-key']) {
+                        sshagent(['ec2-user']) {
                             sh """
                                 ssh -o StrictHostKeyChecking=no ec2-user@ansible-control '
                                     cd ${ANSIBLE_PROJECT_PATH} &&
