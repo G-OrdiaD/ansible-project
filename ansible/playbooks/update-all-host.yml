@@ -2,7 +2,7 @@
 - name: Synchronize /etc/hosts across all servers
   hosts: all
   become: true
-   vars_files:
+  vars_files:
     - ../inventory/group_vars/all.yml
 
   tasks:
