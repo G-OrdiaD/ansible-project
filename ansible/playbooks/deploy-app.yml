@@ -1,22 +1,30 @@
 ---
-- name: Deploy Node.js application # Variable-driven deployment
+- name: Deploy Node.js application
   hosts: app_servers
   vars:
-    app_version: "{{ build_number | default('latest') }}"
-    
+    app_version: "{{ build_number | default('12') }}"
+    app_name: "nodejs-app"
+    app_user: "ec2-user"
+    app_group: "ec2-user"
+    nexus_url: "http://16.171.2.18:8081" 
+  
   tasks:
-    - name: Ensure app directory exists # Fix permissions as needed
+    - name: Ensure app directory exists
       file:
         path: "/opt/{{ app_name }}"
         state: directory
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
+        mode: '0755'
 
-    - name: Download application artifact # Adjust URL as needed
+    - name: Download application artifact from Nexus
       get_url:
-        url: "http://nexus:{{ nexus_port }}/repository/{{ nexus_repo }}/app-{{ app_version }}.zip" # Ensure nexus URL is reachable and correct
-        dest: "/tmp/app-{{ app_version }}.zip" # Download to a temp location
-        
+        url: "{{ nexus_url }}/nexus/content/sites/node-app-releases/app-{{ app_version }}.zip"
+        dest: "/tmp/app-{{ app_version }}.zip"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+
     - name: Extract application
       unarchive:
         src: "/tmp/app-{{ app_version }}.zip"
@@ -24,28 +32,65 @@
         remote_src: yes
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
+        mode: '0644'
 
-    - name: Install dependencies # Using npm as an example
-      command: npm install # Adjust if using yarn or other package managers
-      args:
-        chdir: "/opt/{{ app_name }}" 
-        creates: "/opt/{{ app_name }}/node_modules" # Avoid reinstalling if node_modules exists
+    - name: Install Node.js if not present
+      package:
+        name: nodejs
+        state: present
+      when: ansible_os_family == "RedHat"  # For Amazon Linux
 
-    - name: Deploy systemd service # Example for a Node.js app
+    - name: Install npm if not present
+      package:
+        name: npm
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install dependencies
+      npm:
+        path: "/opt/{{ app_name }}"
+        state: present
+
+    - name: Install pm2 process manager
+      npm:
+        name: pm2
+        global: yes
+        state: present
+
+    - name: Create PM2 ecosystem config
       template:
-        src: "nodeapp.service.j2" # Ensure this template exists in your templates directory
-        dest: "/etc/systemd/system/{{ app_name }}.service" # hostname should match your app_name variable
-      notify: restart nodejs app
+        src: "ecosystem.config.js.j2"
+        dest: "/opt/{{ app_name }}/ecosystem.config.js"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
 
-    - name: Ensure app is running # Start and enable the service
-      systemd:
-        name: "{{ app_name }}"
-        state: started
-        enabled: yes
-        daemon_reload: yes
+    - name: Ensure app is running with PM2
+      shell: |
+        cd /opt/{{ app_name }}
+        pm2 delete {{ app_name }} || true
+        pm2 start ecosystem.config.js
+        pm2 save
+        pm2 startup
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin"
+      args:
+        chdir: "/opt/{{ app_name }}"
+
+    - name: Create PM2 systemd service
+      shell: "pm2 startup systemd -u {{ app_user }} --hp /home/{{ app_user }}"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin"
+
+    - name: Save PM2 process list
+      shell: "pm2 save"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin"
 
   handlers:
     - name: restart nodejs app
-      systemd:
-        name: "{{ app_name }}"
-        state: restarted
+      shell: |
+        cd /opt/{{ app_name }}
+        pm2 restart {{ app_name }}
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/local/bin"
