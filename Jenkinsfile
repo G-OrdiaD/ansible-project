@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases/'
+        NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases'
         ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project/ansible'
     }
     
@@ -28,7 +28,7 @@ pipeline {
                 always {
                     junit '**/junit.xml'
                     publishHTML([target: [
-                        allowMissing: false,
+                        allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
                         reportDir: 'src/coverage/lcov-report',
@@ -58,11 +58,11 @@ pipeline {
                     usernameVariable: 'NEXUS_USER',
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
-                     sh """
-                curl -v -u $NEXUS_USER:$NEXUS_PASS \
-                --upload-file app-${env.BUILD_NUMBER}.zip \
-                ${NEXUS_URL}/app-${env.BUILD_NUMBER}.zip
-            """
+                    sh """
+                        curl -v -u $NEXUS_USER:$NEXUS_PASS \
+                        --upload-file app-${env.BUILD_NUMBER}.zip \
+                        ${NEXUS_URL}/app-${env.BUILD_NUMBER}.zip
+                    """
                 }
             }
         }
@@ -103,24 +103,6 @@ pipeline {
         always {
             echo "Pipeline ${currentBuild.result} - Build ${env.BUILD_NUMBER}"
             cleanWs()
-        }
-        success {
-            slackSend channel: '#deployments',
-                     message: "✅ SUCCESS: ${env.JOB_NAME} - ${env.BUILD_NUMBER} deployed to ${params.DEPLOY_ENV}"
-            emailext (
-                subject: "SUCCESS: Job ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}",
-                body: "Deployment completed successfully.\nCheck: http://app-server",
-                to: "team@yourcompany.com"
-            )
-        }
-        failure {
-            slackSend channel: '#deployments',
-                     message: "❌ FAILED: ${env.JOB_NAME} - ${env.BUILD_NUMBER} failed in ${currentBuild.result}"
-            emailext (
-                subject: "FAILED: Job ${env.JOB_NAME} - Build ${env.BUILD_NUMBER}",
-                body: "Check console output at ${env.BUILD_URL}",
-                to: "team@yourcompany.com"
-            )
         }
     }
 }
