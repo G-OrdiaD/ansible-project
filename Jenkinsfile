@@ -35,7 +35,7 @@ pipeline {
             steps {
                 dir('src') {
                     sh """
-                        zip -r ../app-${env.BUILD_NUMBER}.zip . \
+                        zip -r ../app-${env.BUILD_NUMBER}.zip . \\
                         -x 'node_modules/*' '.git/*' '*.gitignore'
                     """
                     sh "ls -la ../app-${env.BUILD_NUMBER}.zip"
@@ -51,8 +51,8 @@ pipeline {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh """
-                        curl -v -u $NEXUS_USER:$NEXUS_PASS \
-                        --upload-file app-${env.BUILD_NUMBER}.zip \
+                        curl -v -u $NEXUS_USER:$NEXUS_PASS \\
+                        --upload-file app-${env.BUILD_NUMBER}.zip \\
                         ${NEXUS_URL}/app-${env.BUILD_NUMBER}.zip
                     """
                 }
@@ -63,17 +63,15 @@ pipeline {
             steps {
                 script {
                     if (params.DEPLOY_ACTION == 'deploy') {
-                        sshagent(['ec2-user']) {
-                            sh """
-                                ssh -o StrictHostKeyChecking=no ec2-user@ansible-control '
-                                    cd ${ANSIBLE_PROJECT_PATH} &&
-                                    git pull origin main &&
-                                    ansible-playbook playbooks/deploy-app.yml \
-                                        -e "build_number=${env.BUILD_NUMBER}" \
-                                        -e "app_version=${env.BUILD_NUMBER}"
-                                '
-                            """
-                        }
+                        // REPLACED SSH COMMAND WITH DIRECT ANSIBLE CALL
+                        sh """
+                            cd ${ANSIBLE_PROJECT_PATH} && \\
+                            git pull origin main && \\
+                            ansible-playbook playbooks/deploy-app.yml \\
+                                -i inventory/hosts.ini \\
+                                -e "build_number=${env.BUILD_NUMBER}" \\
+                                -e "app_version=${env.BUILD_NUMBER}"
+                        """
                     } else {
                         echo 'Rollback selected - skipping deployment'
                     }
