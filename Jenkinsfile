@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        NEXUS_URL = 'http://nexus:8081/repository/node-app-releases'
+        NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases/'
         ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project/ansible'
     }
     
@@ -58,12 +58,11 @@ pipeline {
                     usernameVariable: 'NEXUS_USER',
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
-                    sh """
-                        curl -f -u $NEXUS_USER:$NEXUS_PASS \
-                        -X PUT \
-                        "${NEXUS_URL}/app-${env.BUILD_NUMBER}.zip" \
-                        -T "app-${env.BUILD_NUMBER}.zip"
-                    """
+                     sh """
+                curl -v -u $NEXUS_USER:$NEXUS_PASS \
+                --upload-file app-${env.BUILD_NUMBER}.zip \
+                ${NEXUS_URL}/app-${env.BUILD_NUMBER}.zip
+            """
                 }
             }
         }
