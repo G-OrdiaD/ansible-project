@@ -3,8 +3,8 @@ pipeline {
     
     environment {
         NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases'
-        ANSIBLE_PROJECT_PATH = '/home/ubuntu/ansible-project'
         APP_SERVER_URL = '51.21.129.73:3000'
+        CONTROL_NODE_IP = '13.60.92.125'
     }
     
     parameters {
@@ -16,19 +16,26 @@ pipeline {
     stages {
         stage('Checkout SCM') {
             steps {
-                // This checks out the application code, not the Ansible project
+                // This checks out the application code
                 git branch: 'main', url: 'https://github.com/G-OrdiaD/ansible-project.git'
             }
         }
         
-        stage('Update Ansible Project') {
+        stage('Update Control-Node Project') {
             steps {
-                sh """
-                    echo "Updating Ansible project on Jenkins server..."
-                    cd ${ANSIBLE_PROJECT_PATH}
-                    git pull origin main
-                    echo "Ansible project updated to latest version"
-                """
+                withCredentials([sshUserPrivateKey(
+                    credentialsId: 'ansible-ssh-key',
+                    keyFileVariable: 'SSH_KEY'
+                )]) {
+                    sh """
+                        echo "🔄 Updating Ansible project on control-node..."
+                        ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${CONTROL_NODE_IP} "
+                            cd /home/ec2-user/ansible-project
+                            git pull origin main
+                            echo '✅ Ansible project updated to latest version on control-node'
+                        "
+                    """
+                }
             }
         }
         
@@ -77,29 +84,47 @@ pipeline {
             steps {
                 script {
                     if (params.DEPLOY_ACTION == 'deploy') {
-                        sh """
-                            echo "🚀 Deploying build ${env.BUILD_NUMBER}..."
-                            cd ${ANSIBLE_PROJECT_PATH}
-                            
-                            # Update server IPs if needed (optional)
-                            # ./scripts/update-server-ips.sh 13.60.92.125 51.21.129.73 16.171.2.18 13.61.19.40
-                            
-                            # Deploy using Ansible
-                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
-                                -e "build_number=${env.BUILD_NUMBER}" \\
-                                -e "app_version=${env.BUILD_NUMBER}"
-                            
-                            echo "✅ Deployment completed!"
-                        """
+                        withCredentials([sshUserPrivateKey(
+                            credentialsId: 'ansible-ssh-key',
+                            keyFileVariable: 'SSH_KEY'
+                        )]) {
+                            sh """
+                                echo "🚀 Deploying build ${env.BUILD_NUMBER} via control-node..."
+                                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${CONTROL_NODE_IP} "
+                                    echo '=== Starting Ansible Deployment ==='
+                                    cd /home/ec2-user/ansible-project
+                                    echo '📦 Deploying build number: ${env.BUILD_NUMBER}'
+                                    
+                                    # Update server IPs if needed (optional)
+                                    # ./scripts/update-server-ips.sh 13.60.92.125 51.21.129.73 16.171.2.18 13.61.19.40
+                                    
+                                    # Deploy using Ansible
+                                    ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
+                                        -e 'build_number=${env.BUILD_NUMBER}' \\
+                                        -e 'app_version=${env.BUILD_NUMBER}'
+                                    
+                                    echo '=== Deployment Completed ==='
+                                "
+                                echo "✅ Deployment executed via control-node!"
+                            """
+                        }
                     } else if (params.DEPLOY_ACTION == 'rollback' && params.ROLLBACK_VERSION != '') {
-                        sh """
-                            echo "🔙 Rolling back to version ${params.ROLLBACK_VERSION}..."
-                            cd ${ANSIBLE_PROJECT_PATH}
-                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
-                                -e "build_number=${params.ROLLBACK_VERSION}" \\
-                                -e "app_version=${params.ROLLBACK_VERSION}"
-                            echo "✅ Rollback completed!"
-                        """
+                        withCredentials([sshUserPrivateKey(
+                            credentialsId: 'ansible-ssh-key',
+                            keyFileVariable: 'SSH_KEY'
+                        )]) {
+                            sh """
+                                echo "🔙 Rolling back to version ${params.ROLLBACK_VERSION} via control-node..."
+                                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${CONTROL_NODE_IP} "
+                                    cd /home/ec2-user/ansible-project
+                                    ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
+                                        -e 'build_number=${params.ROLLBACK_VERSION}' \\
+                                        -e 'app_version=${params.ROLLBACK_VERSION}'
+                                    echo 'Rollback completed on control-node'
+                                "
+                                echo "✅ Rollback executed via control-node!"
+                            """
+                        }
                     } else {
                         echo 'Skipping deployment'
                     }
@@ -132,7 +157,6 @@ pipeline {
             steps {
                 sh """
                     echo "🧹 Cleaning up workspace..."
-                    # Keep the built artifact for reference
                     ls -la *.zip
                 """
             }
@@ -142,13 +166,13 @@ pipeline {
     post {
         always {
             echo "📊 Pipeline ${currentBuild.result} - Build ${env.BUILD_NUMBER}"
-            // Don't cleanWs() if you want to keep artifacts for debugging
         }
         success {
             sh """
                 echo "✅ Pipeline completed successfully!"
                 echo "📦 Build: ${env.BUILD_NUMBER}"
                 echo "🌐 App URL: http://${APP_SERVER_URL}/"
+                echo "🖥️  Deployed via control-node: ${CONTROL_NODE_IP}"
             """
         }
         failure {
