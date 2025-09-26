@@ -3,19 +3,32 @@ pipeline {
     
     environment {
         NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases'
-        ANSIBLE_PROJECT_PATH = '/home/ec2-user/ansible-project'
-        APP_SERVER_URL = '51.21.129.73:3000'  // Your app server IP and port
+        ANSIBLE_PROJECT_PATH = '/home/ubuntu/ansible-project'
+        APP_SERVER_URL = '51.21.129.73:3000'
     }
     
     parameters {
         string(name: 'DEPLOY_ENV', defaultValue: 'staging', description: 'Deployment environment')
         choice(name: 'DEPLOY_ACTION', choices: ['deploy', 'rollback'], description: 'Deploy or Rollback')
+        string(name: 'ROLLBACK_VERSION', defaultValue: '', description: 'Version to rollback to (if rollback)')
     }
     
     stages {
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
+                // This checks out the application code, not the Ansible project
                 git branch: 'main', url: 'https://github.com/G-OrdiaD/ansible-project.git'
+            }
+        }
+        
+        stage('Update Ansible Project') {
+            steps {
+                sh """
+                    echo "Updating Ansible project on Jenkins server..."
+                    cd ${ANSIBLE_PROJECT_PATH}
+                    git pull origin main
+                    echo "Ansible project updated to latest version"
+                """
             }
         }
         
@@ -65,29 +78,62 @@ pipeline {
                 script {
                     if (params.DEPLOY_ACTION == 'deploy') {
                         sh """
-                            cd ${ANSIBLE_PROJECT_PATH} && \\
-                            # Ensure we have the latest playbooks
-                            git pull origin main && \\
+                            echo "🚀 Deploying build ${env.BUILD_NUMBER}..."
+                            cd ${ANSIBLE_PROJECT_PATH}
+                            
+                            # Update server IPs if needed (optional)
+                            # ./scripts/update-server-ips.sh 13.60.92.125 51.21.129.73 16.171.2.18 13.61.19.40
+                            
                             # Deploy using Ansible
-                            ansible-playbook playbooks/deploy-app.yml \\
-                                -i inventory/hosts.ini \\
-                                -e "build_number=${env.BUILD_NUMBER}"
+                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
+                                -e "build_number=${env.BUILD_NUMBER}" \\
+                                -e "app_version=${env.BUILD_NUMBER}"
+                            
+                            echo "✅ Deployment completed!"
+                        """
+                    } else if (params.DEPLOY_ACTION == 'rollback' && params.ROLLBACK_VERSION != '') {
+                        sh """
+                            echo "🔙 Rolling back to version ${params.ROLLBACK_VERSION}..."
+                            cd ${ANSIBLE_PROJECT_PATH}
+                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
+                                -e "build_number=${params.ROLLBACK_VERSION}" \\
+                                -e "app_version=${params.ROLLBACK_VERSION}"
+                            echo "✅ Rollback completed!"
                         """
                     } else {
-                        echo 'Rollback selected - skipping deployment'
+                        echo 'Skipping deployment'
                     }
                 }
             }
         }
         
         stage('Integration Tests') {
+            when {
+                expression { params.DEPLOY_ACTION == 'deploy' }
+            }
             steps {
                 sh """
-                    echo "Testing application health endpoint..."
+                    echo "⏳ Waiting for application to start..."
+                    sleep 30
+                    
+                    echo "🏥 Testing application health..."
                     curl -f http://${APP_SERVER_URL}/health || echo "Health endpoint not available"
                     
-                    echo "Testing main application endpoint..."
+                    echo "🌐 Testing main application..."
                     curl -f http://${APP_SERVER_URL}/ || echo "Main endpoint not available"
+                    
+                    echo "🎉 Application deployment verified!"
+                    echo "🔗 Access your app at: http://${APP_SERVER_URL}/"
+                """
+            }
+        }
+        
+        stage('Cleanup Workspace') {
+            steps {
+                sh """
+                    echo "🧹 Cleaning up workspace..."
+                    # Keep the built artifact for reference
+                    ls -la *.zip
                 """
             }
         }
@@ -95,8 +141,21 @@ pipeline {
     
     post {
         always {
-            echo "Pipeline ${currentBuild.result} - Build ${env.BUILD_NUMBER}"
-            cleanWs()
+            echo "📊 Pipeline ${currentBuild.result} - Build ${env.BUILD_NUMBER}"
+            // Don't cleanWs() if you want to keep artifacts for debugging
+        }
+        success {
+            sh """
+                echo "✅ Pipeline completed successfully!"
+                echo "📦 Build: ${env.BUILD_NUMBER}"
+                echo "🌐 App URL: http://${APP_SERVER_URL}/"
+            """
+        }
+        failure {
+            sh """
+                echo "❌ Pipeline failed!"
+                echo "🔍 Check logs for details"
+            """
         }
     }
 }
