@@ -23,16 +23,6 @@ if [ ! -d "ansible" ]; then
     exit 1
 fi
 
-echo "Debug: Before cd ansible, current directory: $(pwd)"
-cd ansible
-echo "Debug: After cd ansible, current directory: $(pwd)"
-echo "Debug: Contents of current directory:"
-ls -la
-echo "Debug: Checking playbooks directory:"
-ls -la playbooks/
-echo "Debug: Specifically looking for update-all-host.yml:"
-ls -la playbooks/update-all-host.yml
-
 # Update group_vars/all.yml
 mkdir -p inventory/group_vars
 cat > inventory/group_vars/all.yml << EOF
@@ -94,6 +84,7 @@ echo "Debug: Checking if playbook exists at: playbooks/update-all-host.yml"
 if [ -f "playbooks/update-all-host.yml" ]; then
     echo "Debug: Playbook found! Running ansible-playbook..."
     echo "Debug: Using inventory file: ../inventory/hosts.ini"
+    cd ansible
     ansible-playbook -i ../inventory/hosts.ini playbooks/update-all-host.yml
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
