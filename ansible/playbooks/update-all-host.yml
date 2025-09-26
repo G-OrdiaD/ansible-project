@@ -2,12 +2,14 @@
 - name: Synchronize /etc/hosts across all servers
   hosts: all
   become: true
-  
+   vars_files:
+    - ../inventory/group_vars/all.yml
+
   tasks:
     - name: Debug variables
       debug:
-        msg: "server_ips={{ server_ips | default('UNDEFINED') }}"
-    
+	msg: "server_ips={{ server_ips | default('UNDEFINED') }}"
+
     - name: Deploy unified hosts file
       ansible.builtin.template:
         src: hosts.j2
