@@ -83,7 +83,7 @@ echo "Updated /etc/hosts (backup created at /etc/hosts.backup)"
 # Update hosts on all servers via Ansible
 if [ -f "playbooks/update-all-host.yml" ]; then
     echo "Running ansible-playbook to update all servers..."
-    ansible-playbook -i inventory/hosts.ini ansible/playbooks/update-all-host.yml
+    ansible-playbook -i inventory/hosts.ini playbooks/update-all-host.yml
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
     else
