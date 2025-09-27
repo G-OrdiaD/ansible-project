@@ -7,25 +7,18 @@ pipeline {
             choices: ['validate', 'deploy'],
             description: 'Choose deployment action (validate for test/build only, deploy for full rollout)'
         )
-        string(
-            name: 'APP_SERVER_HOST', 
-            defaultValue: 'app',
-            description: 'App server hostname (from inventory)'
-        )
-        string(
-            name: 'NEXUS_HOST',
-            defaultValue: 'nexus',
-            description: 'Nexus hostname (from inventory)'
-        )
     }
     
     environment {
-        // Base URL for Nexus repository to upload artifacts
-        NEXUS_URL = "http://${params.NEXUS_HOST}:8081/nexus/content/sites/node-app-releases/"
-    
-        APP_SERVER_URL = "${params.APP_SERVER_HOST}:3000"
-    
-        env.CONTROL_NODE_PUBLIC_IP = "13.60.92.125" 
+        CONTROL_NODE_PUBLIC_IP = "13.60.92.125" // The actual IP of your Control Node
+        NEXUS_IP = "16.171.2.18"                 // The actual IP of your Nexus server
+        
+        // This is the name Ansible uses internally to target the host in its inventory file.
+        APP_SERVER_LOGICAL_NAME = "app"
+        
+        // --- Derived URLs ---
+        NEXUS_URL = "http://${NEXUS_IP}:8081/nexus/content/sites/node-app-releases/"
+        APP_SERVER_URL = "${APP_SERVER_LOGICAL_NAME}:3000"
     }
     
     stages {
@@ -45,7 +38,7 @@ pipeline {
                         keyFileVariable: 'SSH_KEY'
                     )]) {
                         // 1. Resolve Hostnames via Control Node's known IP
-                        echo "Attempting initial SSH connection using fixed IP: ${env.CONTROL_NODE_PUBLIC_IP}"
+                        echo "Attempting initial SSH connection using fixed IP: ${CONTROL_NODE_PUBLIC_IP}"
                         
                         // Get the Control Node's resolved IP (from its own inventory)
                         env.CONTROL_NODE_IP_FROM_INVENTORY = sh(
@@ -79,7 +72,7 @@ pipeline {
                                 cd /home/ec2-user/ansible-project
                                 ansible --version
                                 
-                                # Use the hostname set in the parameters for Ansible commands
+                                # Use the logical name set in environment for Ansible commands
                                 ansible all -i inventory/hosts.ini -m ping
                             "
                         """
@@ -100,6 +93,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 dir('src') {
+                    // Assuming 'npm test' exists in the src directory
                     sh 'npm test' 
                 }
             }
@@ -154,7 +148,7 @@ pipeline {
                             cd /home/ec2-user/ansible-project
                             ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
                                 -e 'build_number=\${env.BUILD_NUMBER}' \\
-                                -e 'target_host=\${APP_SERVER_HOST}'
+                                -e 'target_host=\${APP_SERVER_LOGICAL_NAME}'
                         "
                     """
                 }
@@ -174,14 +168,14 @@ pipeline {
                     // Use the known public IP to SSH to the Control Node
                     sh """
                         ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@\${CONTROL_NODE_PUBLIC_IP} "
-                            # Run verification commands on the Control Node
+                            # Run verification commands on the Control Node using Ansible
                             # Check direct Node.js port (3000)
-                            ansible \${APP_SERVER_HOST} -i inventory/hosts.ini -m uri \\
-                            -a 'url=http://\${APP_SERVER_HOST}:3000/ method=GET status_code=200'
+                            ansible \${APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri \\
+                            -a 'url=http://\${APP_SERVER_LOGICAL_NAME}:3000/ method=GET status_code=200'
                             
                             # Check Nginx reverse proxy (port 80)
-                            ansible \${APP_SERVER_HOST} -i inventory/hosts.ini -m uri \\
-                            -a 'url=http://\${APP_SERVER_HOST}/ method=GET status_code=200'
+                            ansible \${APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri \\
+                            -a 'url=http://\${APP_SERVER_LOGICAL_NAME}/ method=GET status_code=200'
                         "
                     """
                 }
@@ -194,7 +188,6 @@ pipeline {
             }
             steps {
                 script {
-                    // Use the resolved IPs for the final summary output
                     def summary = """
                     🎉 DEPLOYMENT SUCCESSFUL - BUILD #${env.BUILD_NUMBER}
                     
@@ -213,9 +206,10 @@ pipeline {
                         Nginx Status: http://${env.APP_SERVER_IP}/nginx_status
                     
                     🔧 Server Details:
-                        App Server: ${env.APP_SERVER_IP}
-                        Control Node (Public): ${env.CONTROL_NODE_PUBLIC_IP}
-                        Control Node (Inventory IP): ${env.CONTROL_NODE_IP_FROM_INVENTORY}
+                        App Server IP: ${env.APP_SERVER_IP}
+                        Control Node IP (Public): ${env.CONTROL_NODE_PUBLIC_IP}
+                        Control Node IP (Inventory): ${env.CONTROL_NODE_IP_FROM_INVENTORY}
+                        Nexus IP: ${env.NEXUS_IP}
                         Build Number: ${env.BUILD_NUMBER}
                         Deployment Time: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
                     
@@ -237,7 +231,7 @@ pipeline {
         success {
             script {
                 if (params.DEPLOY_ACTION == 'deploy') {
-                    echo "Deployment to ${params.APP_SERVER_HOST} completed successfully!"
+                    echo "Deployment to ${APP_SERVER_LOGICAL_NAME} completed successfully!"
                 }
             }
         }
