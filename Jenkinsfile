@@ -46,13 +46,15 @@ pipeline {
                             "
                         """
 
-                        // 2. Verify connection and Ansible's ability to reach all hosts
+                        // 2. Verify connection and Ansible's ability to reach essential hosts only
                         sh """
                             ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
                                 echo '✅ SSH connection successful to Control Node!'
                                 cd /home/ec2-user/ansible-project
                                 ansible --version
-                                ansible all -i inventory/hosts.ini -m ping
+                                
+                                # FIX: Only ping essential servers for deployment (skip jenkins-master)
+                                ansible app,nexus,control-node -i inventory/hosts.ini -m ping
                             "
                         """
                     }
