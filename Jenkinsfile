@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        NEXUS_URL = 'http://16.171.2.18:8081/nexus/content/sites/node-app-releases'
+        NEXUS_URL = 'http://13.60.63.31:8081/nexus/content/sites/node-app-releases/'
         APP_SERVER_URL = '51.21.129.73:3000'
         CONTROL_NODE_IP = '13.60.92.125'
     }
