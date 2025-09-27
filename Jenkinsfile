@@ -75,9 +75,11 @@ pipeline {
                 dir('src') {
                     // Create the application package (ZIP file)
                     sh """
-                        zip -r ../app-\${env.BUILD_NUMBER}.zip . \\
+                        zip -r ../app-${env.BUILD_NUMBER}.zip . \\
                         -x 'node_modules/*' '.git/*' '*.gitignore'
                     """
+                    // Verify the zip file was created
+                    sh "ls -la ../app-${env.BUILD_NUMBER}.zip
                 }
             }
         }
@@ -91,7 +93,7 @@ pipeline {
                 )]) {
                     sh """
                         # Publish the application package to Nexus repository
-                        curl -v --user "\$NEXUS_USER:\$NEXUS_PASS" --upload-file "app-\${env.BUILD_NUMBER}.zip" \
+                        curl -v --user "\$NEXUS_USER:\$NEXUS_PASS" --upload-file "app-${env.BUILD_NUMBER}.zip" \
                         "${env.NEXUS_URL}app-\${env.BUILD_NUMBER}.zip"
                     """
                 }
