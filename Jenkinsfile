@@ -10,13 +10,12 @@ pipeline {
     }
 
     environment {
-        // Hardcoded IPs for Jenkins agent connectivity (Nexus and Control Node)
+        // Hardcoded IPs for Jenkins agent connectivity (Control Node and Nexus)
         CONTROL_NODE_PUBLIC_IP = "13.60.92.125"
         NEXUS_IP = "13.60.63.31" // Verified public IP for Nexus
         APP_SERVER_LOGICAL_NAME = "app" // Logical name used in Ansible inventory
         
         NEXUS_URL = "http://${NEXUS_IP}:8081/nexus/content/sites/node-app-releases/"
-        // Note: APP_SERVER_URL is informational only; deployment uses Ansible.
     }
 
     stages {
@@ -38,6 +37,11 @@ pipeline {
                         sh """
                             ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
                                 cd /home/ec2-user/ansible-project
+                                
+                                # FIX: Force reset local repo to discard IP changes that cause 'cannot pull with rebase' error
+                                git reset --hard HEAD
+                                git clean -fd
+                                
                                 git pull origin main
                             "
                         """
@@ -148,7 +152,7 @@ pipeline {
             }
             steps {
                 script {
-                    // We can reuse the known IPs from the environment block
+                    // We need to resolve the App Server's IP for the final summary URL
                     def appServerIP = sh(
                         script: """
                             ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
