@@ -63,6 +63,8 @@ echo "Updated inventory/group_vars/all.yml"
 
 # Update /etc/hosts on the control node first
 echo "Updating /etc/hosts on control node..."
+# WARNING: This complex sudo bash -c block is highly prone to shell parsing errors (EOF error).
+# It is kept as per user request to maintain structure, but the error may persist.
 sudo bash -c "cat > /tmp/new_hosts << EOF
 127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
 ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
@@ -80,20 +82,17 @@ sudo rm -f /tmp/new_hosts
 echo "Updated /etc/hosts (backup created at /etc/hosts.backup)"
 
 # Update hosts on all servers via Ansible
-PLAYBOOK_PATH="ansible/playbooks/update-all-host.yml"
+PLAYBOOK_PATH="ansible/playbooks/update-all-host.yml" 
 
 echo "Debug: Checking if playbook exists at: ${PLAYBOOK_PATH}"
 if [ -f "${PLAYBOOK_PATH}" ]; then
     echo "Debug: Playbook found! Running ansible-playbook..."
-    
 
-    # relative to the ansible directory (e.g., '../templates/hosts.j2').
+    echo "Debug: Using inventory file: ../inventory/hosts.ini"
     cd ansible
     
     # Run the playbook. Note: The playbook path must be relative to the current directory ('ansible').
-    # playbooks/update-all-host.yml is correct relative to the 'ansible' directory.
     ansible-playbook -i ../inventory/hosts.ini playbooks/update-all-host.yml
-    
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
     else
