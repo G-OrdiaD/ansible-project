@@ -7,7 +7,7 @@
     app_user: "ec2-user"
     app_group: "ec2-user"
     app_port: "3000"
-    nexus_url: "http://16.171.2.18:8081/nexus/content/sites/node-app-releases"
+    nexus_url: "http://13.60.63.31:8081/nexus/content/sites/node-app-releases"
   
   tasks:
     - name: Debug build number
@@ -17,7 +17,7 @@
     - name: Find latest build if 'latest' is specified
       shell: |
         # Get the latest build number from Nexus or available files
-        curl -s http://16.171.2.18:8081/nexus/content/sites/node-app-releases/ | \
+        curl -s http://13.60.63.31:8081/nexus/content/sites/node-app-releases/ | \
         grep -o 'app-[0-9]*\.zip' | \
         sed 's/app-\([0-9]*\)\.zip/\1/' | \
         sort -n | \
