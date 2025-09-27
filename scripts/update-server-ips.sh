@@ -80,19 +80,27 @@ sudo rm -f /tmp/new_hosts
 echo "Updated /etc/hosts (backup created at /etc/hosts.backup)"
 
 # Update hosts on all servers via Ansible
-echo "Debug: Checking if playbook exists at: playbooks/update-all-host.yml"
-if [ -f "playbooks/update-all-host.yml" ]; then
+PLAYBOOK_PATH="ansible/playbooks/update-all-host.yml"
+
+echo "Debug: Checking if playbook exists at: ${PLAYBOOK_PATH}"
+if [ -f "${PLAYBOOK_PATH}" ]; then
     echo "Debug: Playbook found! Running ansible-playbook..."
-    echo "Debug: Using inventory file: ../inventory/hosts.ini"
+    
+
+    # relative to the ansible directory (e.g., '../templates/hosts.j2').
     cd ansible
+    
+    # Run the playbook. Note: The playbook path must be relative to the current directory ('ansible').
+    # playbooks/update-all-host.yml is correct relative to the 'ansible' directory.
     ansible-playbook -i ../inventory/hosts.ini playbooks/update-all-host.yml
+    
     if [ $? -eq 0 ]; then
         echo "Playbook executed successfully"
     else
         echo "Warning: Playbook execution failed, but IPs were updated locally"
     fi
 else
-    echo "Error: playbooks/update-all-host.yml not found"
+    echo "Error: ${PLAYBOOK_PATH} not found"
     echo "IPs were updated in inventory/group_vars/all.yml and local /etc/hosts, but playbook was not run"
     exit 1
 fi
