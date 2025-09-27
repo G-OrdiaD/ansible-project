@@ -5,226 +5,93 @@ pipeline {
         choice(
             name: 'DEPLOY_ACTION',
             choices: ['validate', 'deploy'],
-            description: 'Choose deployment action (validate for test/build only, deploy for full rollout)'
+            description: 'Choose deployment action'
         )
         string(
             name: 'CONTROL_NODE_HOST',
             defaultValue: 'control-node',
-            description: 'Control node hostname (from inventory)'
+            description: 'Control node hostname'
         )
         string(
             name: 'APP_HOST', 
             defaultValue: 'app',
-            description: 'App server hostname (from inventory)'
+            description: 'App server hostname'
         )
         string(
             name: 'NEXUS_HOST',
             defaultValue: 'nexus',
-            description: 'Nexus hostname (from inventory)'
+            description: 'Nexus hostname'
         )
     }
     
     environment {
-        // Base URL for Nexus repository to upload artifacts
-        NEXUS_URL = "http://${params.NEXUS_HOST}:8081/nexus/content/sites/node-app-releases/"
-    
-        APP_SERVER_URL = "${params.APP_HOST}:3000"
+        NEXUS_REPO_URL = "http://${params.NEXUS_HOST}:8081/repository/node-app-releases/"
     }
     
     stages {
-        
-        stage('Checkout SCM') {
-            steps {
-                // Checkout the Ansible project repository
-                git branch: 'main', url: 'https://github.com/G-OrdiaD/ansible-project.git'
-            }
-        }
-        
-        stage('Setup Control Node & Verify') {
+        stage('Resolve Hostnames') {
             steps {
                 script {
-                    withCredentials([sshUserPrivateKey(
-                        credentialsId: 'ansible-ssh-key',
-                        keyFileVariable: 'SSH_KEY'
-                    )]) {
-                        // 1. Resolve Hostnames and store IPs in environment variables
-                        echo "Resolving hostnames via Ansible inventory on Control Node..."
-                        
-                        env.CONTROL_NODE_IP = sh(
-                            script: """
-                                ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${params.CONTROL_NODE_HOST} "
-                                    ansible-inventory -i inventory/hosts.ini --list | jq -r '.control.hosts[0]'
-                                "
-                            """,
-                            returnStdout: true
-                        ).trim()
-                        
-                        env.APP_SERVER_IP = sh(
-                            script: """
-                                ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${params.CONTROL_NODE_HOST} "
-                                    ansible-inventory -i inventory/hosts.ini --list | jq -r '.app_servers.hosts[0]'
-                                "
-                            """,
-                            returnStdout: true
-                        ).trim()
-                        
-                        echo "Control Node IP: ${env.CONTROL_NODE_IP}"
-                        echo "App Server IP: ${env.APP_SERVER_IP}"
-
-                        // 2. Verify Control Node Access and Ansible Ping
-                        echo "Verifying Control Node access and Ansible connectivity..."
-                        sh """
-                            ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@\${CONTROL_NODE_IP} "
-                                echo '✅ SSH connection successful to Control Node!'
-                                cd /home/ec2-user/ansible-project
-                                ansible --version
-                                ansible all -i inventory/hosts.ini -m ping
-                            "
-                        """
-                        
-                        // 3. Update Control Node Project (Ansible playbooks)
-                        echo "Updating Git repository on Control Node..."
-                        sh """
-                            ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@\${CONTROL_NODE_IP} "
-                                cd /home/ec2-user/ansible-project
-                                git pull origin main
-                            "
-                        """
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        env.CONTROL_NODE_IP = resolveHost(params.CONTROL_NODE_HOST, 'control')
+                        env.APP_SERVER_IP = resolveHost(params.APP_SERVER_HOST, 'app_servers')
                     }
                 }
             }
         }
         
-        stage('Unit Tests') {
+        stage('Checkout & Update Control Node') {
+            steps {
+                checkout scm
+                updateControlNode()
+            }
+        }
+        
+        stage('Build & Test') {
             steps {
                 dir('src') {
-                    // Assuming node.js environment is available on the agent
-                    sh 'npm test' 
+                    sh 'npm install && npm test'
+                    sh "zip -r ../app-${env.BUILD_NUMBER}.zip . -x 'node_modules/*' '.git/*'"
                 }
             }
         }
         
-        stage('Build Package') {
-            steps {
-                dir('src') {
-                    // Create application deployment zip package in the workspace root
-                    sh """
-                        zip -r ../app-\${env.BUILD_NUMBER}.zip . \\
-                        -x 'node_modules/*' '.git/*' '*.gitignore'
-                    """
-                }
-                archiveArtifacts artifacts: "app-${env.BUILD_NUMBER}.zip", onlyIfSuccessful: true
-            }
-        }
-        
-        // NEW STAGE: Publish the built artifact to Nexus
-        stage('Publish to Nexus') {
+        stage('Nexus Upload') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'nexus-creds', // <-- UPDATED TO USE 'nexus-creds'
+                    credentialsId: 'nexus-credentials',
                     usernameVariable: 'NEXUS_USER',
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh """
-                        ARTIFACT_NAME="app-${env.BUILD_NUMBER}.zip"
-                        echo "Uploading \${ARTIFACT_NAME} to Nexus: ${env.NEXUS_URL}"
-                        
-                        # Use curl for authenticated upload 
-                        curl -v --user \${NEXUS_USER}:\${NEXUS_PASS} \\
-                             --upload-file \${ARTIFACT_NAME} \\
-                             ${env.NEXUS_URL}/\${ARTIFACT_NAME}
-                        
-                        echo "Nexus upload successful."
+                        curl -f -u $NEXUS_USER:$NEXUS_PASS ${NEXUS_REPO_URL} || exit 1
+                        curl -u $NEXUS_USER:$NEXUS_PASS --upload-file app-${env.BUILD_NUMBER}.zip ${NEXUS_REPO_URL}app-${env.BUILD_NUMBER}.zip
                     """
                 }
             }
         }
         
-        stage('Deploy to App Server') {
-            when {
-                expression { params.DEPLOY_ACTION == 'deploy' }
-            }
+        stage('Deploy') {
+            when { expression { params.DEPLOY_ACTION == 'deploy' } }
             steps {
-                withCredentials([sshUserPrivateKey(
-                    credentialsId: 'ansible-ssh-key',
-                    keyFileVariable: 'SSH_KEY'
-                )]) {
-                    // Execute Ansible deployment playbook on the Control Node
+                withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@\${CONTROL_NODE_IP} "
+                        ssh -i $SSH_KEY ec2-user@${env.CONTROL_NODE_IP} "
                             cd /home/ec2-user/ansible-project
-                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \\
-                                -e 'build_number=\${env.BUILD_NUMBER}' \\
-                                -e 'target_host=\${APP_SERVER_HOST}'
+                            ansible-playbook -i inventory/hosts.ini ansible/playbooks/deploy-app.yml \
+                                -e 'build_number=${env.BUILD_NUMBER}' \
+                                -e 'nexus_url=${NEXUS_REPO_URL}'
                         "
                     """
                 }
             }
         }
         
-        stage('Verify Deployment') {
-            when {
-                expression { params.DEPLOY_ACTION == 'deploy' }
-            }
+        stage('Verify & Summary') {
+            when { expression { params.DEPLOY_ACTION == 'deploy' } }
             steps {
-                // Wait for services to start and then run health checks via Ansible uri module
-                sh 'sleep 10' 
-                withCredentials([sshUserPrivateKey(
-                    credentialsId: 'ansible-ssh-key',
-                    keyFileVariable: 'SSH_KEY'
-                )]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@\${CONTROL_NODE_IP} "
-                            # Check direct Node.js port (3000)
-                            ansible \${APP_SERVER_HOST} -i inventory/hosts.ini -m uri \\
-                            -a 'url=http://\${APP_SERVER_HOST}:3000/ method=GET status_code=200'
-                            
-                            # Check Nginx reverse proxy (port 80)
-                            ansible \${APP_SERVER_HOST} -i inventory/hosts.ini -m uri \\
-                            -a 'url=http://\${APP_SERVER_HOST}/ method=GET status_code=200'
-                        "
-                    """
-                }
-            }
-        }
-        
-        stage('Deployment Summary') {
-            when {
-                expression { params.DEPLOY_ACTION == 'deploy' }
-            }
-            steps {
-                script {
-                    // Use previously resolved IPs (env.APP_SERVER_IP and env.CONTROL_NODE_IP)
-                    def summary = """
-                    🎉 DEPLOYMENT SUCCESSFUL - BUILD #${env.BUILD_NUMBER}
-                    
-                    📱 APPLICATION ACCESS URLs:
-                    
-                    🔗 Direct Node.js API Access:
-                        URL: http://${env.APP_SERVER_IP}:3000
-                        Test: curl http://${env.APP_SERVER_IP}:3000
-                    
-                    🌐 Production Access (via Nginx Reverse Proxy):
-                        URL: http://${env.APP_SERVER_IP}/
-                        Test: curl http://${env.APP_SERVER_IP}/
-                    
-                    📊 Application Health:
-                        Health Check: http://${env.APP_SERVER_IP}:3000/
-                        Nginx Status: http://${env.APP_SERVER_IP}/nginx_status
-                    
-                    🔧 Server Details:
-                        App Server: ${env.APP_SERVER_IP}
-                        Control Node: ${env.CONTROL_NODE_IP}
-                        Build Number: ${env.BUILD_NUMBER}
-                        Deployment Time: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
-                    
-                    ✅ All services are running and accessible.
-                    """
-                    
-                    echo summary
-                    writeFile file: 'deployment-summary.txt', text: summary
-                    archiveArtifacts artifacts: 'deployment-summary.txt', fingerprint: true
-                }
+                verifyDeployment()
+                deploymentSummary()
             }
         }
     }
@@ -232,16 +99,91 @@ pipeline {
     post {
         always {
             cleanWs()
-        }
-        success {
             script {
-                if (params.DEPLOY_ACTION == 'deploy') {
-                    echo "Deployment to ${params.APP_SERVER_HOST} completed successfully!"
-                }
+                notifySlack(currentBuild.result)
             }
         }
-        failure {
-            echo "Pipeline failed! Check logs for errors."
-        }
     }
+}
+
+// Shared functions
+def resolveHost(hostname, group) {
+    return sh(
+        script: """
+            ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${hostname} "
+                ansible-inventory -i inventory/hosts.ini --list | jq -r '.${group}.hosts[0]'
+            "
+        """,
+        returnStdout: true
+    ).trim()
+}
+
+def updateControlNode() {
+    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+        sh """
+            ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${env.CONTROL_NODE_IP} "
+                cd /home/ec2-user/ansible-project
+                git pull origin main
+                ansible all -i inventory/hosts.ini -m ping
+            "
+        """
+    }
+}
+
+def verifyDeployment() {
+    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+        sh """
+            ssh -i $SSH_KEY ec2-user@${env.CONTROL_NODE_IP} "
+                ansible ${params.APP_SERVER_HOST} -i inventory/hosts.ini -m uri \
+                    -a 'url=http://${params.APP_SERVER_HOST}:3000/ method=GET status_code=200'
+                ansible ${params.APP_SERVER_HOST} -i inventory/hosts.ini -m uri \
+                    -a 'url=http://${params.APP_SERVER_HOST}/ method=GET status_code=200'
+            "
+        """
+    }
+}
+
+def deploymentSummary() {
+    def summary = """
+🎉 DEPLOYMENT SUCCESSFUL - BUILD #${env.BUILD_NUMBER}
+
+📱 APPLICATION ACCESS URLs:
+
+🔗 Direct API: http://${env.APP_SERVER_IP}:3000
+🌐 Production: http://${env.APP_SERVER_IP}/
+
+🔧 Server Details:
+   App Server: ${env.APP_SERVER_IP}
+   Build: #${env.BUILD_NUMBER}
+   Time: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
+"""
+    echo summary
+    writeFile file: 'deployment-summary.txt', text: summary
+    archiveArtifacts artifacts: 'deployment-summary.txt'
+}
+
+def notifySlack(buildResult) {
+    def color = 'good'
+    def status = 'SUCCESS'
+    
+    if (buildResult == 'FAILURE') {
+        color = 'danger'
+        status = 'FAILED'
+    } else if (buildResult == 'UNSTABLE') {
+        color = 'warning'
+        status = 'UNSTABLE'
+    }
+    
+    def message = """
+${status}: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+Action: ${params.DEPLOY_ACTION}
+Result: ${currentBuild.currentResult}
+URL: ${env.BUILD_URL}
+"""
+    
+    slackSend (
+        channel: '#deployments',
+        color: color,
+        message: message
+    )
 }
