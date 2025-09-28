@@ -172,7 +172,7 @@
           📦 Build: {{ actual_build_number }}
           🌐 Port status: {{ app_status.stdout }}
           🧪 Health check: {{ app_test.status }}
-          🔗 Access URL: http://13.60.92.125:{{ app_port }}/
+          🔗 Access URL: http://{{ ansible_host }}:{{ app_port }}/
 
   handlers:
     - name: restart nodejs app
