@@ -114,13 +114,13 @@ pipeline {
                     keyFileVariable: 'SSH_KEY'
                 )]) {
                     sh "sleep 10"
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
-                            cd /home/ec2-user/ansible-project
-                            ansible ${env.APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri -a 'url=http://${env.APP_SERVER_LOGICAL_NAME}:3000/ method=GET status_code=200'
-                            ansible ${env.APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri -a 'url=http://${env.APP_SERVER_LOGICAL_NAME}/ method=GET status_code=200'
-                        "
-                    """
+                   sh """
+                      ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
+                          cd /home/ec2-user/ansible-project
+                          ansible app -i inventory/hosts.ini -m uri -a 'url=http://51.21.129.73:3000/ method=GET status_code=200'
+                          ansible app -i inventory/hosts.ini -m uri -a 'url=http://51.21.129.73/ method=GET status_code=200'
+                      "
+                  """
                 }
             }
         }
@@ -132,17 +132,10 @@ pipeline {
             steps {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        def appServerIP = sh(
-                            script: """
-                                ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
-                                    cd /home/ec2-user/ansible-project
-                                    ansible-inventory -i inventory/hosts.ini --list | jq -r '.app_servers.hosts[0]'
-                                "
-                            """,
-                            returnStdout: true
-                        ).trim()
+                        def appServerIP = "51.21.129.73"
                         
                         def summary = """
+                        
 🎉 DEPLOYMENT SUCCESSFUL - BUILD #${env.BUILD_NUMBER}
 
 📱 APPLICATION ACCESS URLs:
