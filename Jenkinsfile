@@ -13,6 +13,7 @@ pipeline {
         CONTROL_NODE_PUBLIC_IP = "13.60.92.125"
         NEXUS_IP = "13.60.63.31"
         APP_SERVER_LOGICAL_NAME = "app"
+        APP_SERVER_IP = "51.21.129.73"
         NEXUS_URL = "http://${NEXUS_IP}:8081/nexus/content/sites/node-app-releases/"
     }
 
@@ -115,6 +116,7 @@ pipeline {
                     sh "sleep 10"
                     sh """
                         ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ec2-user@${env.CONTROL_NODE_PUBLIC_IP} "
+                            cd /home/ec2-user/ansible-project
                             ansible ${env.APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri -a 'url=http://${env.APP_SERVER_LOGICAL_NAME}:3000/ method=GET status_code=200'
                             ansible ${env.APP_SERVER_LOGICAL_NAME} -i inventory/hosts.ini -m uri -a 'url=http://${env.APP_SERVER_LOGICAL_NAME}/ method=GET status_code=200'
                         "
@@ -145,11 +147,11 @@ pipeline {
 
 📱 APPLICATION ACCESS URLs:
 
-🔗 Direct API: http://${appServerIP}:3000
-🌐 Production: http://${appServerIP}/
+🔗 Direct API: http://${env.APP_SERVER_IP}:3000
+🌐 Nginx Reverse Proxy: http://${env.APP_SERVER_IP}
 
 🔧 Server Details:
-   App Server: ${appServerIP}
+   App Server: ${env.APP_SERVER_IP}
    Control Node: ${env.CONTROL_NODE_PUBLIC_IP}
    Build: #${env.BUILD_NUMBER}
    Time: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
